@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Stickman Logic Battle</title>
+    <style>
+        :root {
+            --primary: #4ade80; /* Green */
+            --danger: #ef4444;  /* Red */
+            --dark: #111827;
+            --light: #f3f4f6;
+            --ui-bg: rgba(31, 41, 55, 0.95);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            user-select: none; /* Prevent text selection during taps */
+        }
+
+        body {
+            background-color: var(--dark);
+            color: var(--light);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* --- LAYOUT UTAMA --- */
+        #game-container {
+            position: relative;
+            width: 100%;
+            max-width: 800px;
+            margin: 0 auto;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            background: linear-gradient(to bottom, #1f2937, #111827);
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+
+        /* --- BATTLE ARENA (CANVAS) --- */
+        #arena {
+            flex: 1; /* Mengambil sisa ruang */
+            position: relative;
+            width: 100%;
+            background: transparent;
+            z-index: 1;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* --- HUD (HEADS UP DISPLAY) --- */
+        .hud {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            padding: 15px;
+            display: flex;
+            justify-content: space-between;
+            z-index: 10;
+            pointer-events: none; /* Agar klik tembus ke bawah jika perlu */
+        }
+
+        .health-container {
+            width: 40%;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .health-bar-bg {
+            width: 100%;
+            height: 12px;
+            background: #374151;
+            border-radius: 6px;
+            overflow: hidden;
+            border: 2px solid #4b5563;
+        }
+
+        .health-bar-fill {
+            height: 100%;
+            width: 100%;
+            transition: width 0.5s ease-out, background-color 0.3s;
+        }
+
+        .hp-text {
+            font-size: 0.8rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            text-shadow: 1px 1px 2px black;
+        }
+
+        /* --- UI PANEL (SOAL & JAWABAN) --- */
+        #ui-panel {
+            background-color: var(--ui-bg);
+            padding: 20px;
+            border-top: 2px solid #374151;
+            z-index: 20;
+            min-height: 250px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .progress-container {
+            width: 100%;
+            height: 6px;
+            background: #374151;
+            margin-bottom: 15px;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: #60a5fa;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .question-text {
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+            text-align: center;
+            line-height: 1.4;
+            font-weight: 600;
+        }
+
+        .options-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .option-btn {
+            background: #374151;
+            border: 2px solid #4b5563;
+            color: white;
+            padding: 15px;
+            border-radius: 12px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+
+        .option-btn:active {
+            transform: scale(0.95);
+        }
+
+        @media(hover: hover) {
+            .option-btn:hover {
+                background: #4b5563;
+                border-color: #9ca3af;
+            }
+        }
+
+        /* Feedback Colors */
+        .option-btn.correct {
+            background: var(--primary) !important;
+            border-color: #22c55e !important;
+            color: #000;
+            animation: pop 0.3s;
+        }
+
+        .option-btn.wrong {
+            background: var(--danger) !important;
+            border-color: #ef4444 !important;
+            animation: shake 0.4s;
+        }
+
+        /* --- OVERLAY SCREENS --- */
+        .screen-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 50;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            background: linear-gradient(to right, #4ade80, #3b82f6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .start-btn {
+            margin-top: 30px;
+            padding: 15px 40px;
+            font-size: 1.2rem;
+            background: linear-gradient(45deg, #2563eb, #3b82f6);
+            color: white;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(37, 99, 235, 0.4);
+            transition: transform 0.2s;
+        }
+
+        .start-btn:active {
+            transform: scale(0.95);
+        }
+
+        /* --- ANIMATIONS --- */
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+
+        @keyframes pop {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
+        .screen-shake {
+            animation: shake-screen 0.3s;
+        }
+
+        @keyframes shake-screen {
+            0% { transform: translate(0, 0); }
+            20% { transform: translate(-5px, 5px); }
+            40% { transform: translate(5px, -5px); }
+            60% { transform: translate(-5px, -5px); }
+            80% { transform: translate(5px, 5px); }
+            100% { transform: translate(0, 0); }
+        }
+
+        /* --- RESPONSIVE TWEAKS --- */
+        @media (max-width: 600px) {
+            .options-grid {
+                grid-template-columns: 1fr; /* Stack buttons on mobile */
+                gap: 8px;
+            }
+            #ui-panel {
+                min-height: auto;
+                padding: 15px;
+            }
+            h1 { font-size: 2rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        
+        <!-- UI Layer -->
+        <div class="hud">
+            <!-- Player Health -->
+            <div class="health-container">
+                <div class="hp-text" style="color: #4ade80;">Hero (Kamu)</div>
+                <div class="health-bar-bg">
+                    <div id="player-hp-bar" class="health-bar-fill" style="background: #4ade80; width: 100%;"></div>
+                </div>
+            </div>
+
+            <!-- Enemy Health -->
+            <div class="health-container" style="align-items: flex-end;">
+                <div class="hp-text" style="color: #ef4444;">Musuh Jahat</div>
+                <div class="health-bar-bg">
+                    <div id="enemy-hp-bar" class="health-bar-fill" style="background: #ef4444; width: 100%;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Canvas Arena -->
+        <div id="arena">
+            <canvas id="gameCanvas"></canvas>
+        </div>
+
+        <!-- Quiz Panel -->
+        <div id="ui-panel">
+            <div class="progress-container">
+                <div id="progress-bar" class="progress-fill"></div>
+            </div>
+            <div id="question-text" class="question-text">Loading...</div>
+            <div id="options-container" class="options-grid">
+                <!-- Buttons will be injected here -->
+            </div>
+        </div>
+
+        <!-- Start Screen -->
+        <div id="start-screen" class="screen-overlay">
+            <h1>Stickman Logic Battle</h1>
+            <p>Jawab pertanyaan dengan benar untuk menyerang musuh.</p>
+            <p style="margin-top:10px; font-size: 0.9rem; color: #aaa;">Matematika & Logika Dasar</p>
+            <button class="start-btn" onclick="startGame()">Mulai Pertarungan</button>
+        </div>
+
+        <!-- Game Over Screen -->
+        <div id="end-screen" class="screen-overlay hidden">
+            <h1 id="end-title">Game Over</h1>
+            <p id="end-message">Skor Kamu: 0</p>
+            <button class="start-btn" onclick="restartGame()">Main Lagi</button>
+        </div>
+    </div>
+
+    <script>
+        // --- CONFIGURATION ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const container = document.getElementById('game-container');
+        
+        // Game State
+        let gameState = {
+            playerHP: 100,
+            enemyHP: 100,
+            currentQIndex: 0,
+            score: 0,
+            isPlaying: false,
+            isAnimating: false // Locks input during attack animations
+        };
+
+        // --- DATABASE SOAL (Quiz Data) ---
+        const questions = [
+            { q: "Berapa hasil dari 5 + 3 x 2?", options: ["16", "11", "10", "13"], a: 1 }, // 11
+            { q: "Apa ibukota Indonesia?", options: ["Jakarta", "Bandung", "Surabaya", "Medan"], a: 0 },
+            { q: "Jika merah dicampur biru, jadi warna apa?", options: ["Hijau", "Ungu", "Coklat", "Hitam"], a: 1 },
+            { q: "20 dibagi setengah (0.5) sama dengan?", options: ["10", "20", "40", "50"], a: 2 },
+            { q: "Hewan apa yang berkokok di pagi hari?", options: ["Kucing", "Ayam", "Sapi", "Bebek"], a: 1 },
+            { q: "Mana yang LEBIH BESAR: 1/2 atau 1/4?", options: ["1/2", "1/4", "Sama", "Tidak Tahu"], a: 0 },
+            { q: "Lanjutkan pola: 2, 4, 8, 16, ...", options: ["24", "30", "32", "64"], a: 2 },
+            { q: "Bulan ke-10 adalah...", options: ["September", "Oktober", "November", "Desember"], a: 1 },
+            { q: "Akar dari 64 adalah?", options: ["6", "7", "8", "9"], a: 2 },
+            { q: "Bahasa Inggris 'Kupu-kupu' adalah?", options: ["Dragonfly", "Butterfly", "Firefly", "Housefly"], a: 1 }
+        ];
+
+        // --- CANVAS ENGINE (Stickman Drawing & Animation) ---
+        
+        let player = { x: 100, y: 0, color: '#4ade80', state: 'idle', targetX: 100 };
+        let enemy = { x: 0, y: 0, color: '#ef4444', state: 'idle', targetX: 0 };
+        let particles = [];
+
+        function resizeCanvas() {
+            // Set canvas resolution to match display size for sharpness
+            const rect = document.getElementById('arena').getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+            
+            // Reposition stickmen based on new width
+            player.y = canvas.height * 0.7;
+            player.x = canvas.width * 0.2;
+            player.targetX = player.x;
+
+            enemy.y = canvas.height * 0.7;
+            enemy.x = canvas.width * 0.8;
+            enemy.targetX = enemy.x;
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+
+        function drawStickman(ctx, x, y, color, facingRight, state) {
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 4;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+
+            // Animation Offsets
+            let bounce = Math.sin(Date.now() / 200) * 5; // Breathing effect
+            let armOffset = 0;
+            let legOffset = 0;
+
+            if (state === 'attack') {
+                armOffset = facingRight ? 20 : -20;
+                legOffset = 10;
+                bounce = 0;
+            } else if (state === 'hit') {
+                bounce = 0;
+                // Shake effect is handled by screen shake
+            }
+
+            // Head
+            ctx.beginPath();
+            ctx.arc(x, y - 50 + bounce, 15, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Body
+            ctx.beginPath();
+            ctx.moveTo(x, y - 35 + bounce);
+            ctx.lineTo(x, y + 10 + bounce);
+            ctx.stroke();
+
+            // Arms
+            ctx.beginPath();
+            ctx.moveTo(x, y - 25 + bounce);
+            // Dynamic arm based on state
+            if (state === 'attack') {
+                ctx.lineTo(x + (facingRight ? 40 : -40), y - 30 + bounce); // Punch
+            } else {
+                ctx.lineTo(x + (facingRight ? 20 : -20), y + bounce); // Idle
+            }
+            ctx.stroke();
+
+            // Legs
+            ctx.beginPath();
+            ctx.moveTo(x, y + 10 + bounce);
+            ctx.lineTo(x - 15 + legOffset, y + 50 + bounce); // Left Leg
+            ctx.moveTo(x, y + 10 + bounce);
+            ctx.lineTo(x + 15 - legOffset, y + 50 + bounce); // Right Leg
+            ctx.stroke();
+
+            // Shadow
+            ctx.fillStyle = 'rgba(0,0,0,0.3)';
+            ctx.beginPath();
+            ctx.ellipse(x, y + 55, 20, 5, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        function createParticles(x, y, color) {
+            for(let i=0; i<10; i++) {
+                particles.push({
+                    x: x,
+                    y: y,
+                    vx: (Math.random() - 0.5) * 10,
+                    vy: (Math.random() - 0.5) * 10,
+                    life: 1.0,
+                    color: color
+                });
+            }
+        }
+
+        function updateAndDraw() {
+            // Clear Screen
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Update Positions (Simple easing)
+            player.x += (player.targetX - player.x) * 0.1;
+            enemy.x += (enemy.targetX - enemy.x) * 0.1;
+
+            // Draw Floor
+            ctx.strokeStyle = '#374151';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(0, player.y + 55);
+            ctx.lineTo(canvas.width, player.y + 55);
+            ctx.stroke();
+
+            // Draw Stickmen
+            drawStickman(ctx, player.x, player.y, player.color, true, player.state);
+            drawStickman(ctx, enemy.x, enemy.y, enemy.color, false, enemy.state);
+
+            // Draw Particles
+            for (let i = particles.length - 1; i >= 0; i--) {
+                let p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.life -= 0.05;
+                
+                if (p.life <= 0) {
+                    particles.splice(i, 1);
+                } else {
+                    ctx.fillStyle = p.color;
+                    ctx.globalAlpha = p.life;
+                    ctx.fillRect(p.x, p.y - 40, 6, 6);
+                    ctx.globalAlpha = 1.0;
+                }
+            }
+
+            requestAnimationFrame(updateAndDraw);
+        }
+
+        // --- GAME LOGIC ---
+
+        function startGame() {
+            document.getElementById('start-screen').classList.add('hidden');
+            document.getElementById('end-screen').classList.add('hidden');
+            
+            // Reset Stats
+            gameState.playerHP = 100;
+            gameState.enemyHP = 100;
+            gameState.currentQIndex = 0;
+            gameState.score = 0;
+            gameState.isPlaying = true;
+            gameState.isAnimating = false;
+
+            updateHPUI();
+            resizeCanvas(); // Ensure positions are correct
+            loadQuestion();
+            
+            // Start Loop
+            updateAndDraw();
+        }
+
+        function loadQuestion() {
+            if (gameState.currentQIndex >= questions.length) {
+                endGame(true); // Win by finishing all questions
+                return;
+            }
+
+            const qData = questions[gameState.currentQIndex];
+            const qEl = document.getElementById('question-text');
+            const optsEl = document.getElementById('options-container');
+            const progressEl = document.getElementById('progress-bar');
+
+            // Update Progress
+            const progress = (gameState.currentQIndex / questions.length) * 100;
+            progressEl.style.width = `${progress}%`;
+
+            // Render Text
+            qEl.innerText = `Soal ${gameState.currentQIndex + 1}: ${qData.q}`;
+            
+            // Render Buttons
+            optsEl.innerHTML = '';
+            qData.options.forEach((opt, index) => {
+                const btn = document.createElement('div');
+                btn.className = 'option-btn';
+                btn.innerText = opt;
+                btn.onclick = () => handleAnswer(index, btn);
+                optsEl.appendChild(btn);
+            });
+        }
+
+        function handleAnswer(selectedIndex, btnElement) {
+            if (gameState.isAnimating || !gameState.isPlaying) return;
+
+            const currentQ = questions[gameState.currentQIndex];
+            const isCorrect = selectedIndex === currentQ.a;
+            
+            gameState.isAnimating = true; // Lock inputs
+
+            // Visual Feedback on Button
+            if (isCorrect) {
+                btnElement.classList.add('correct');
+                gameState.score += 10;
+                performAttack('player');
+            } else {
+                btnElement.classList.add('wrong');
+                // Show correct one
+                const buttons = document.querySelectorAll('.option-btn');
+                buttons[currentQ.a].classList.add('correct');
+                performAttack('enemy');
+            }
+
+            // Logic flow handled inside performAttack animations
+        }
+
+        function performAttack(attacker) {
+            const originalPlayerX = canvas.width * 0.2;
+            const originalEnemyX = canvas.width * 0.8;
+            const center = canvas.width * 0.5;
+
+            if (attacker === 'player') {
+                // 1. Dash to Enemy
+                player.state = 'attack';
+                player.targetX = originalEnemyX - 50;
+                
+                setTimeout(() => {
+                    // 2. Hit Logic
+                    enemy.state = 'hit';
+                    createParticles(originalEnemyX, enemy.y, '#ef4444');
+                    shakeScreen();
+                    
+                    // Reduce HP
+                    gameState.enemyHP = Math.max(0, gameState.enemyHP - 20); // 20 damage
+                    updateHPUI();
+
+                    // 3. Return
+                    setTimeout(() => {
+                        player.targetX = originalPlayerX;
+                        player.state = 'idle';
+                        enemy.state = 'idle';
+                        
+                        finishTurn();
+                    }, 500);
+
+                }, 400); // Time to reach enemy
+
+            } else {
+                // Enemy Attacking
+                enemy.state = 'attack';
+                enemy.targetX = originalPlayerX + 50;
+
+                setTimeout(() => {
+                    player.state = 'hit';
+                    createParticles(originalPlayerX, player.y, '#4ade80');
+                    shakeScreen();
+
+                    gameState.playerHP = Math.max(0, gameState.playerHP - 25); // 25 damage
+                    updateHPUI();
+
+                    setTimeout(() => {
+                        enemy.targetX = originalEnemyX;
+                        enemy.state = 'idle';
+                        player.state = 'idle';
+
+                        finishTurn();
+                    }, 500);
+                }, 400);
+            }
+        }
+
+        function finishTurn() {
+            gameState.isAnimating = false;
+            
+            // Check Death
+            if (gameState.playerHP <= 0) {
+                endGame(false);
+            } else if (gameState.enemyHP <= 0) {
+                endGame(true);
+            } else {
+                // Next Question
+                gameState.currentQIndex++;
+                loadQuestion();
+            }
+        }
+
+        function updateHPUI() {
+            document.getElementById('player-hp-bar').style.width = gameState.playerHP + '%';
+            document.getElementById('enemy-hp-bar').style.width = gameState.enemyHP + '%';
+        }
+
+        function shakeScreen() {
+            container.classList.add('screen-shake');
+            setTimeout(() => container.classList.remove('screen-shake'), 300);
+        }
+
+        function endGame(isWin) {
+            gameState.isPlaying = false;
+            const screen = document.getElementById('end-screen');
+            const title = document.getElementById('end-title');
+            const msg = document.getElementById('end-message');
+
+            screen.classList.remove('hidden');
+            if (isWin) {
+                title.innerText = "VICTORY!";
+                title.style.color = "#4ade80";
+                msg.innerText = `Hebat! Kamu mengalahkan musuh.\nSkor Akhir: ${gameState.score}`;
+            } else {
+                title.innerText = "DEFEAT";
+                title.style.color = "#ef4444";
+                msg.innerText = `Yah, kamu kalah...\nSkor Akhir: ${gameState.score}`;
+            }
+        }
+
+        function restartGame() {
+            startGame();
+        }
+
+        // Initialize empty canvas
+        resizeCanvas();
+
+    </script>
+</body>
+</html>
